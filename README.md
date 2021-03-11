@@ -9,7 +9,7 @@ filesystem will provide the server with a hashname of
 `/scripts/main-b633a..d628.js`. Note the hash is truncated for brevity. When
 this file path is requested by the client, the server can verify the hash and
 return the contents with an aggressive `Cache-Control` header. The client will
-cache this file for up to a year and does not need to re-reqeust it in the
+cache this file for up to a year and does not need to re-request it in the
 future.
 
 Note that this library requires Go 1.16 or higher.
