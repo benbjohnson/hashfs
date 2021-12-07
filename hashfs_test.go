@@ -172,6 +172,8 @@ func TestFileServer(t *testing.T) {
 			t.Fatalf("content-type=%v, want %v", got, want)
 		} else if got, want := hdr.Get("Content-Length"), `13`; got != want {
 			t.Fatalf("content-length=%v, want %v", got, want)
+		} else if got, want := hdr.Get("ETag"), ""; got != want {
+			t.Fatalf("etag=%v, want %v", got, want)
 		} else if got, want := w.Body.String(), `<html></html>`; got != want {
 			t.Fatalf("body=%q, want %q", got, want)
 		}
@@ -183,6 +185,8 @@ func TestFileServer(t *testing.T) {
 		h := hashfs.FileServer(fsys)
 		h.ServeHTTP(w, r)
 
+		hash := "\"b633a587c652d02386c4f16f8c6f6aab7352d97f16367c3c40576214372dd628\""
+
 		hdr := w.Result().Header
 		if got, want := w.Code, 200; got != want {
 			t.Fatalf("code=%v, want %v", got, want)
@@ -192,6 +196,8 @@ func TestFileServer(t *testing.T) {
 			t.Fatalf("content-type=%v, want %v", got, want)
 		} else if got, want := hdr.Get("Content-Length"), `13`; got != want {
 			t.Fatalf("content-length=%v, want %v", got, want)
+		} else if got, want := hdr.Get("ETag"), hash; got != want {
+			t.Fatalf("etag=%v, want %v", got, want)
 		} else if got, want := w.Body.String(), `<html></html>`; got != want {
 			t.Fatalf("body=%q, want %q", got, want)
 		}
