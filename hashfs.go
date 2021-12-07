@@ -6,12 +6,10 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"mime"
 	"net/http"
 	"os"
 	"path"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 )
@@ -45,26 +43,23 @@ func (fsys *FS) Open(name string) (fs.File, error) {
 	return f, err
 }
 
-func (fsys *FS) open(name string) (_ fs.File, isHashed bool, err error) {
+func (fsys *FS) open(name string) (_ fs.File, hash string, err error) {
 	// Lookup original file by hashed name.
 	fsys.mu.RLock()
 	if hashname, ok := fsys.r[name]; ok {
 		name = hashname
-		isHashed = true
 	}
 	fsys.mu.RUnlock()
 
 	// Parse filename to see if it contains a hash.
 	// If so, check if hash name matches.
-	if base, hash := ParseName(name); hash != "" {
-		if fsys.HashName(base) == name {
-			name = base
-			isHashed = true
-		}
+	base, hash := ParseName(name)
+	if hash != "" && fsys.HashName(base) == name {
+		name = base
 	}
 
 	f, err := fsys.fsys.Open(name)
-	return f, isHashed, err
+	return f, hash, err
 }
 
 // HashName returns the hash name for a path, if exists.
@@ -170,7 +165,7 @@ func (h *fsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	filename = path.Clean(filename)
 
 	// Read file from attached file system.
-	f, isHashed, err := h.fsys.open(filename)
+	f, hash, err := h.fsys.open(filename)
 	if os.IsNotExist(err) {
 		http.Error(w, "404 page not found", http.StatusNotFound)
 		return
@@ -190,22 +185,12 @@ func (h *fsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Determine content type based on file extension.
-	if ext := path.Ext(filename); ext != "" {
-		w.Header().Set("Content-Type", mime.TypeByExtension(ext))
-	}
-
 	// Cache the file aggressively if the file contains a hash.
-	if isHashed {
+	if hash != "" {
 		w.Header().Set("Cache-Control", `public, max-age=31536000`)
+		w.Header().Set("ETag", "\""+hash+"\"")
 	}
-
-	// Set content length.
-	w.Header().Set("Content-Length", strconv.FormatInt(fi.Size(), 10))
 
 	// Flush header and write content.
-	w.WriteHeader(http.StatusOK)
-	if r.Method != "HEAD" {
-		io.Copy(w, f)
-	}
+	http.ServeContent(w, r, filename, fi.ModTime(), f.(io.ReadSeeker))
 }
