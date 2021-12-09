@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -192,5 +193,17 @@ func (h *fsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Flush header and write content.
-	http.ServeContent(w, r, filename, fi.ModTime(), f.(io.ReadSeeker))
+	switch f := f.(type) {
+	case io.ReadSeeker:
+		http.ServeContent(w, r, filename, fi.ModTime(), f.(io.ReadSeeker))
+	default:
+		// Set content length.
+		w.Header().Set("Content-Length", strconv.FormatInt(fi.Size(), 10))
+
+		// Flush header and write content.
+		w.WriteHeader(http.StatusOK)
+		if r.Method != "HEAD" {
+			io.Copy(w, f)
+		}
+	}
 }
