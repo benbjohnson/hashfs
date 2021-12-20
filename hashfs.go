@@ -25,15 +25,15 @@ type FS struct {
 	fsys fs.FS
 
 	mu sync.RWMutex
-	m  map[string]string // lookup (path to hash path)
-	r  map[string]string // reverse lookup (hash path to path)
+	m  map[string]string    // lookup (path to hash path)
+	r  map[string][2]string // reverse lookup (hash path to path)
 }
 
 func NewFS(fsys fs.FS) *FS {
 	return &FS{
 		fsys: fsys,
 		m:    make(map[string]string),
-		r:    make(map[string]string),
+		r:    make(map[string][2]string),
 	}
 }
 
@@ -45,16 +45,9 @@ func (fsys *FS) Open(name string) (fs.File, error) {
 }
 
 func (fsys *FS) open(name string) (_ fs.File, hash string, err error) {
-	// Lookup original file by hashed name.
-	fsys.mu.RLock()
-	if hashname, ok := fsys.r[name]; ok {
-		name = hashname
-	}
-	fsys.mu.RUnlock()
-
 	// Parse filename to see if it contains a hash.
 	// If so, check if hash name matches.
-	base, hash := ParseName(name)
+	base, hash := fsys.ParseName(name)
 	if hash != "" && fsys.HashName(base) == name {
 		name = base
 	}
@@ -82,12 +75,13 @@ func (fsys *FS) HashName(name string) string {
 
 	// Compute hash and build filename.
 	hash := sha256.Sum256(buf)
-	hashname := FormatName(name, hex.EncodeToString(hash[:]))
+	hashhex := hex.EncodeToString(hash[:])
+	hashname := FormatName(name, hashhex)
 
 	// Store in lookups.
 	fsys.mu.Lock()
 	fsys.m[name] = hashname
-	fsys.r[hashname] = name
+	fsys.r[hashname] = [2]string{name, hashhex}
 	fsys.mu.Unlock()
 
 	return hashname
@@ -109,6 +103,18 @@ func FormatName(filename, hash string) string {
 		return path.Join(dir, fmt.Sprintf("%s-%s%s", base[:i], hash, base[i:]))
 	}
 	return path.Join(dir, fmt.Sprintf("%s-%s", base, hash))
+}
+
+// ParseName splits formatted hash filename into its base & hash components.
+func (fsys *FS) ParseName(filename string) (base, hash string) {
+	fsys.mu.RLock()
+	defer fsys.mu.RUnlock()
+
+	if hashed, ok := fsys.r[filename]; ok {
+		return hashed[0], hashed[1]
+	}
+
+	return ParseName(filename)
 }
 
 // ParseName splits formatted hash filename into its base & hash components.
