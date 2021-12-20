@@ -181,25 +181,27 @@ func TestFileServer(t *testing.T) {
 
 	t.Run("WithHash", func(t *testing.T) {
 		r, _ := http.NewRequest("GET", "testdata/baz-b633a587c652d02386c4f16f8c6f6aab7352d97f16367c3c40576214372dd628.html", nil)
-		w := httptest.NewRecorder()
 		h := hashfs.FileServer(fsys)
-		h.ServeHTTP(w, r)
-
 		hash := "\"b633a587c652d02386c4f16f8c6f6aab7352d97f16367c3c40576214372dd628\""
 
-		hdr := w.Result().Header
-		if got, want := w.Code, 200; got != want {
-			t.Fatalf("code=%v, want %v", got, want)
-		} else if got, want := hdr.Get("Cache-Control"), `public, max-age=31536000`; got != want {
-			t.Fatalf("cache-control=%v, want %v", got, want)
-		} else if got, want := hdr.Get("Content-Type"), `text/html; charset=utf-8`; got != want {
-			t.Fatalf("content-type=%v, want %v", got, want)
-		} else if got, want := hdr.Get("Content-Length"), `13`; got != want {
-			t.Fatalf("content-length=%v, want %v", got, want)
-		} else if got, want := hdr.Get("ETag"), hash; got != want {
-			t.Fatalf("etag=%v, want %v", got, want)
-		} else if got, want := w.Body.String(), `<html></html>`; got != want {
-			t.Fatalf("body=%q, want %q", got, want)
+		for i := 0; i < 2; i++ {
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+
+			hdr := w.Result().Header
+			if got, want := w.Code, 200; got != want {
+				t.Fatalf("code=%v, want %v", got, want)
+			} else if got, want := hdr.Get("Cache-Control"), `public, max-age=31536000`; got != want {
+				t.Fatalf("cache-control=%v, want %v", got, want)
+			} else if got, want := hdr.Get("Content-Type"), `text/html; charset=utf-8`; got != want {
+				t.Fatalf("content-type=%v, want %v", got, want)
+			} else if got, want := hdr.Get("Content-Length"), `13`; got != want {
+				t.Fatalf("content-length=%v, want %v", got, want)
+			} else if got, want := hdr.Get("ETag"), hash; got != want {
+				t.Fatalf("etag=%v, want %v", got, want)
+			} else if got, want := w.Body.String(), `<html></html>`; got != want {
+				t.Fatalf("body=%q, want %q", got, want)
+			}
 		}
 	})
 
