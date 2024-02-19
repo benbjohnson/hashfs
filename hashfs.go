@@ -3,11 +3,11 @@ package hashfs
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
-	"os"
 	"path"
 	"regexp"
 	"strconv"
@@ -173,7 +173,7 @@ func (h *fsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Read file from attached file system.
 	f, hash, err := h.fsys.open(filename)
-	if os.IsNotExist(err) {
+	if errors.Is(err, fs.ErrNotExist) {
 		http.Error(w, "404 page not found", http.StatusNotFound)
 		return
 	} else if err != nil {
