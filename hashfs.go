@@ -48,8 +48,12 @@ func (fsys *FS) open(name string) (_ fs.File, hash string, err error) {
 	// Parse filename to see if it contains a hash.
 	// If so, check if hash name matches.
 	base, hash := fsys.ParseName(name)
-	if hash != "" && fsys.HashName(base) == name {
-		name = base
+	if hash != "" {
+		if fsys.HashName(base) == name {
+			name = base
+		} else {
+			hash = ""
+		}
 	}
 
 	f, err := fsys.fsys.Open(name)
@@ -140,7 +144,7 @@ func ParseName(filename string) (base, hash string) {
 	return path.Join(dir, pre[:len(pre)-65]+ext), pre[len(pre)-64:]
 }
 
-var hashSuffixRegex = regexp.MustCompile(`-[0-9a-f]{64}`)
+var hashSuffixRegex = regexp.MustCompile(`-[0-9a-f]{64}$`)
 
 // FileServer returns an http.Handler for serving FS files. It provides a
 // simplified implementation of http.FileServer which is used to aggressively

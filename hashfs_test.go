@@ -6,7 +6,9 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/benbjohnson/hashfs"
 )
@@ -96,6 +98,21 @@ func TestParseName(t *testing.T) {
 			t.Fatalf("base=%q, want %q", got, want)
 		}
 	})
+}
+
+func TestParseName_InvalidHashSuffix(t *testing.T) {
+	hash := strings.Repeat("a", 64)
+	for _, suffix := range []string{"0", "x", "-", "-other"} {
+		for _, ext := range []string{"", ".txt", ".tar.gz"} {
+			name := "assets/file-" + hash + suffix + ext
+			t.Run(suffix+ext, func(t *testing.T) {
+				base, hash := hashfs.ParseName(name)
+				if base != name || hash != "" {
+					t.Fatalf("ParseName(%q)=(%q, %q), want (%q, %q)", name, base, hash, name, "")
+				}
+			})
+		}
+	}
 }
 
 func TestFS_Name(t *testing.T) {
@@ -243,4 +260,44 @@ func TestFileServer(t *testing.T) {
 			t.Fatalf("body=%q, want %q", got, want)
 		}
 	})
+}
+
+func TestFileServer_UnverifiedHash(t *testing.T) {
+	hash := strings.Repeat("a", 64)
+	for _, name := range []string{
+		"file-" + hash + "0.txt",
+		"file-" + hash + "x.txt",
+		"file-" + hash + "-.txt",
+		"file-" + hash + ".txt",
+		"missing-" + hash + ".txt",
+	} {
+		t.Run(name, func(t *testing.T) {
+			fsys := fstest.MapFS{
+				"file.txt": &fstest.MapFile{Data: []byte("base contents")},
+				name:       &fstest.MapFile{Data: []byte("literal filename contents")},
+			}
+			h := hashfs.FileServer(fsys)
+			for _, method := range []string{http.MethodGet, http.MethodHead} {
+				t.Run(method, func(t *testing.T) {
+					w := httptest.NewRecorder()
+					h.ServeHTTP(w, httptest.NewRequest(method, "/"+name, nil))
+					if got := w.Code; got != http.StatusOK {
+						t.Fatalf("code=%d, want %d", got, http.StatusOK)
+					}
+					for _, field := range []string{"Cache-Control", "ETag"} {
+						if got := w.Header().Get(field); got != "" {
+							t.Errorf("%s=%q, want empty for literal filename", field, got)
+						}
+					}
+					want := "literal filename contents"
+					if method == http.MethodHead {
+						want = ""
+					}
+					if got := w.Body.String(); got != want {
+						t.Errorf("body=%q, want %q", got, want)
+					}
+				})
+			}
+		})
+	}
 }
